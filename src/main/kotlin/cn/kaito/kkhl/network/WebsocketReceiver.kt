@@ -1,8 +1,13 @@
 package cn.kaito.kkhl.network
 
 import cn.kaito.kkhl.API_BASE
+import cn.kaito.kkhl.event.RawEvent
+import cn.kaito.kkhl.event.base.EventExtraBase
+import cn.kaito.kkhl.event.base.MessageType
+import cn.kaito.kkhl.event.base.MessageType.*
 import cn.kaito.kkhl.network.base.IReceiver
 import cn.kaito.kkhl.utils.zlibDecompress
+import com.google.gson.GsonBuilder
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
@@ -11,15 +16,17 @@ import io.ktor.client.plugins.logging.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
+import io.ktor.serialization.gson.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import org.reflections.Reflections
+import org.reflections.util.ConfigurationBuilder
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.reflect.full.createInstance
 
 class WebsocketReceiver(private val token: String) : IReceiver {
 
@@ -28,13 +35,18 @@ class WebsocketReceiver(private val token: String) : IReceiver {
 
     override val name: String
         get() = "Websocket"
-    override val dataBuffer: ConcurrentLinkedQueue<String> = ConcurrentLinkedQueue()
+
+    override val dataBuffer: ConcurrentLinkedQueue<EventExtraBase> = ConcurrentLinkedQueue()
+
+    private val eventTypes = Reflections(ConfigurationBuilder().forPackage("cn.kaito.kkhl.event"))
+        .getSubTypesOf(EventExtraBase::class.java)
+        .map { it.kotlin }
 
     private val client = HttpClient {
         install(Logging)
         install(WebSockets)
         install(ContentNegotiation) {
-            json()
+            gson()
         }
         install(HttpTimeout) {
             requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
@@ -50,16 +62,16 @@ class WebsocketReceiver(private val token: String) : IReceiver {
                 println("Error while connecting")
                 cancel()
             }
-            val inRoutine = launch { frameIn() }
+            val receiveRoutine = launch { frameIn() }
             val pingRoutine = launch { heartBeat() }
 
-            inRoutine.join()
+            receiveRoutine.join()
             pingRoutine.cancelAndJoin()
         }
     }
 
     private fun reconnect() {
-
+        TODO()
     }
 
     private suspend fun DefaultClientWebSocketSession.frameIn() {
@@ -90,11 +102,12 @@ class WebsocketReceiver(private val token: String) : IReceiver {
         return "{\"s\":2,\"sn\":$sn}"
     }
 
-    fun dispatch(frame: Frame) {
+    private fun dispatch(frame: Frame) {
         val data = parse(frame)
         when (data.s) {
             0 -> {
-                println(frame.data.zlibDecompress())
+                eventParse(data)
+                println(this.dataBuffer.poll())
             }
             3 -> {
                 println("receive PONG.")
@@ -104,11 +117,31 @@ class WebsocketReceiver(private val token: String) : IReceiver {
                 reconnect()
             }
         }
+
     }
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private fun eventParse(frame: WSFrame){
+        val rawEvent = gson.fromJson(gson.toJson(frame.d),RawEvent::class.java)
+        when(rawEvent.type){
+            System ->{
+                val type = rawEvent.extra.type
+                val dstEventType = eventTypes.find { it.createInstance().type == type }!!
+                val dstEvent = gson.fromJson(gson.toJson(rawEvent.extra),dstEventType.java)
+                this.dataBuffer.offer(dstEvent)
+                this.sn = frame.sn?:this.sn
+            }
+            Text -> TODO()
+            Pic -> TODO()
+            Video -> TODO()
+            File -> TODO()
+            Audio -> TODO()
+            KMarkdown -> TODO()
+            Card -> TODO()
+        }
+    }
 
-    private fun parse(frame: Frame) = json.decodeFromString<WSFrame>(frame.data.zlibDecompress())
+    private val gson = GsonBuilder().registerTypeAdapter(MessageType::class.java, Text).create()
+    private fun parse(frame: Frame) = gson.fromJson(frame.data.zlibDecompress(),WSFrame::class.java)
 
     private suspend fun getGateway(): String {
         val response = http("$API_BASE/gateway/index")

@@ -3,7 +3,6 @@ package cn.kaito.kkhl.network
 import kotlinx.serialization.Serializable
 
 
-@Serializable
 data class HttpResponse(
     val code: Int,
     val message: String,
@@ -11,12 +10,12 @@ data class HttpResponse(
 )
 
 
-@Serializable
 data class WSFrame(
-    val s: Int
+    val s: Int,
+    val d: Map<String,Any>,
+    val sn: Int?
 )
 
-@Serializable
 data class WSData(
     val code: Int,
     val sn: Int,
