@@ -1,7 +1,5 @@
 package cn.kaito.kkhl.network
 
-import kotlinx.serialization.Serializable
-
 
 data class HttpResponse(
     val code: Int,
@@ -12,7 +10,7 @@ data class HttpResponse(
 
 data class WSFrame(
     val s: Int,
-    val d: Map<String,Any>,
+    val d: Map<String, Any>,
     val sn: Int?
 )
 

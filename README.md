@@ -5,10 +5,10 @@ Kotlin Kaiheila bot
 
 > in developing...
 
-**Progress:**
-- Nothing done yet
+**Done:**
+- Receive events and messages
 
 **TODO:**
-- Everything
+- Http api
 
 #### There is no guarantee in this repository, and it will be deleted at any time.

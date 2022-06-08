@@ -1,4 +1,4 @@
-package cn.kaito.kkhl.entity
+package cn.kaito.kkhl.entity.objects
 
 data class Channel(
     val guild_id: String,

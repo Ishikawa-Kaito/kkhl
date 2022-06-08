@@ -1,11 +1,11 @@
 package cn.kaito.kkhl.event
 
-import cn.kaito.kkhl.event.base.ChannelType
+import cn.kaito.kkhl.entity.enums.ChannelType
+import cn.kaito.kkhl.entity.enums.MessageType
 import cn.kaito.kkhl.event.base.EventExtraBase
-import cn.kaito.kkhl.event.base.MessageType
 
 
-data class RawEvent(
+class RawEvent(
     val channel_type: ChannelType,
     val type: MessageType,
     val target_id: String,
@@ -14,8 +14,10 @@ data class RawEvent(
     val msg_id: String,
     val msg_timestamp: Long,
     val nonce: String,
-    val extra: RawEventExtra,
+    val extra: RawEventExtra
 )
 
-
-data class RawEventExtra(override val type: String, override val body: Map<String,Any>):EventExtraBase
+class RawEventExtra : EventExtraBase {
+    override var type: Any = ""
+    override var body: Map<String, Any> = mapOf()
+}

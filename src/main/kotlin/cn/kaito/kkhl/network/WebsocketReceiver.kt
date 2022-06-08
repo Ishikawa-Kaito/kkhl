@@ -1,11 +1,12 @@
 package cn.kaito.kkhl.network
 
 import cn.kaito.kkhl.API_BASE
+import cn.kaito.kkhl.entity.enums.MessageType
+import cn.kaito.kkhl.entity.enums.MessageType.Text
 import cn.kaito.kkhl.event.RawEvent
 import cn.kaito.kkhl.event.base.EventExtraBase
-import cn.kaito.kkhl.event.base.MessageType
-import cn.kaito.kkhl.event.base.MessageType.*
 import cn.kaito.kkhl.network.base.IReceiver
+import cn.kaito.kkhl.utils.BooleanTypeAdapter
 import cn.kaito.kkhl.utils.zlibDecompress
 import com.google.gson.GsonBuilder
 import io.ktor.client.*
@@ -22,7 +23,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import org.reflections.Reflections
 import org.reflections.util.ConfigurationBuilder
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -107,7 +107,7 @@ class WebsocketReceiver(private val token: String) : IReceiver {
         when (data.s) {
             0 -> {
                 eventParse(data)
-                println(this.dataBuffer.poll())
+                println(dataBuffer.poll().body)
             }
             3 -> {
                 println("receive PONG.")
@@ -120,28 +120,29 @@ class WebsocketReceiver(private val token: String) : IReceiver {
 
     }
 
-    private fun eventParse(frame: WSFrame){
-        val rawEvent = gson.fromJson(gson.toJson(frame.d),RawEvent::class.java)
-        when(rawEvent.type){
-            System ->{
-                val type = rawEvent.extra.type
-                val dstEventType = eventTypes.find { it.createInstance().type == type }!!
-                val dstEvent = gson.fromJson(gson.toJson(rawEvent.extra),dstEventType.java)
-                this.dataBuffer.offer(dstEvent)
-                this.sn = frame.sn?:this.sn
+    private fun eventParse(frame: WSFrame) {
+        val rawEvent = gson.fromJson(gson.toJson(frame.d), RawEvent::class.java)
+        val type = rawEvent.extra.type
+        val dstEventType = eventTypes.find {
+            if (it.createInstance().type is Int) {
+                if (type !is Double) false
+                else
+                    it.createInstance().type == type.toString().toDouble().toInt()
+            } else {
+                it.createInstance().type == type
             }
-            Text -> TODO()
-            Pic -> TODO()
-            Video -> TODO()
-            File -> TODO()
-            Audio -> TODO()
-            KMarkdown -> TODO()
-            Card -> TODO()
-        }
+        } ?: return
+        val dstEvent = gson.fromJson(gson.toJson(rawEvent.extra), dstEventType.java)
+        this.dataBuffer.offer(dstEvent)
+        this.sn = frame.sn ?: this.sn
     }
 
-    private val gson = GsonBuilder().registerTypeAdapter(MessageType::class.java, Text).create()
-    private fun parse(frame: Frame) = gson.fromJson(frame.data.zlibDecompress(),WSFrame::class.java)
+    private val gson = GsonBuilder().also {
+        it.registerTypeAdapter(MessageType::class.java, Text)
+        it.registerTypeAdapter(Boolean::class.java, BooleanTypeAdapter())
+    }.create()
+
+    private fun parse(frame: Frame) = gson.fromJson(frame.data.zlibDecompress(), WSFrame::class.java)
 
     private suspend fun getGateway(): String {
         val response = http("$API_BASE/gateway/index")
